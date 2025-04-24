@@ -1,0 +1,8 @@
+[package]
+name = "library"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+encoding_rs = "0.8.35"
+regex = "1.11.1"
