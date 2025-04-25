@@ -1,5 +1,6 @@
 use encoding_rs::SHIFT_JIS;
 use regex::Regex;
+use std::io;
 use std::path::Path;
 use std::process::Command;
 
@@ -69,5 +70,31 @@ impl User {
         } else {
             Err("Not found!".into())
         }
+    }pub fn get_userinfo() -> Self {
+    println!(
+        "Hello! RCC図書館へようこそ．\nカードリーダーに学生証を置いたらEnterを押してください．"
+    );
+
+    for attempt in 1..=5 {
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).unwrap();
+        println!("読み込み中... (試行 {}/{})", attempt, 5);
+
+        match Self::readcard() {
+            Ok(user) => return user,
+            Err(e) => {
+                eprintln!("カードの読み取りに失敗しました：{}", e);
+                if attempt == 5 {
+                    eprintln!("5回連続で失敗したため、終了します。");
+                    std::process::exit(1);
+                } else {
+                    println!("もう一度カードを置いて Enter を押してください。");
+                }
+            }
+        }
     }
+
+    unreachable!();
+}
+
 }

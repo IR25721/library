@@ -1,8 +1,7 @@
-use readname::{Fromcard, User};
+use readname::User;
 mod readname;
 fn main() {
-    let userinfo = User::readcard();
-    let user = userinfo.as_ref().expect("not found name");
+    let user = User::get_userinfo();
     println!(
         "Your name is {:?}\nYour card ID is {:?}",
         user.get_username(),
