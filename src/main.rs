@@ -1,6 +1,6 @@
 use readname::User;
 mod readname;
-mod userDB;
+mod user_db;
 fn main() {
     let user = User::get_userinfo();
     println!(

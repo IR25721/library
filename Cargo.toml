@@ -6,3 +6,5 @@ edition = "2024"
 [dependencies]
 encoding_rs = "0.8.35"
 regex = "1.11.1"
+tokio = "1.44.2"
+sqlx = "0.8.5"
