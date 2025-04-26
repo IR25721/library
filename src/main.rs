@@ -9,16 +9,11 @@ async fn main() -> Result<()> {
     let pool = SqlitePool::connect("sqlite:database.db").await?;
     let user = User::get_userinfo();
     let user_id = user.get_userid();
-    let _user_name = user.get_username();
+    let user_name = user.get_username();
     let register_userinfo = register_userinfo(&pool, &user);
-    println!(
-        "Your name is {:?}\nYour card ID is {:?}",
-        user.get_username(),
-        user.get_userid()
-    );
     let is_exist = is_user_exists(&pool, &user_id);
     if is_exist.await? {
-        todo!();
+        println!("こんにちは{}さん", user_name)
     } else {
         println!(
             "はじめまして！\nDBにUser情報を登録しますか？\n登録するならEnterを，しないなら終了してください．"
