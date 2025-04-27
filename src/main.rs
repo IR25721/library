@@ -1,7 +1,10 @@
 use readname::User;
 use sqlx::*;
 use tokio::io::AsyncReadExt;
-use user_table::{is_user_exists, register_userinfo};
+use user_table::LoginInfo;
+use user_table::LoginUserInfo;
+use user_table::is_user_exists;
+use user_table::register_userinfo;
 mod readname;
 mod user_table;
 #[tokio::main]
@@ -11,9 +14,16 @@ async fn main() -> Result<()> {
     let user_id = user.get_userid();
     let user_name = user.get_username();
     let register_userinfo = register_userinfo(&pool, &user);
+    let login = LoginUserInfo::log_user_access(&pool, &user_id);
+    let user_access_info = LoginUserInfo::get_access_info(&pool, &user_id).await?;
     let is_exist = is_user_exists(&pool, &user_id);
     if is_exist.await? {
-        println!("こんにちは{}さん", user_name)
+        println!(
+            "こんにちは{}さん.現在時刻は{}です.あなたはこれまで{:?}回ログインしました.",
+            user_name,
+            login.await?,
+            user_access_info.get_count_login()
+        )
     } else {
         println!(
             "はじめまして！\nDBにUser情報を登録しますか？\n登録するならEnterを，しないなら終了してください．"
