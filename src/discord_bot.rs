@@ -1,27 +1,73 @@
+use crate::readname::{Fromcard, User};
+use crate::user_table::{LoginInfo, LoginUserInfo, is_user_exists, register_userinfo};
 use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
 use serenity::prelude::*;
-pub struct Handler;
+use sqlx::{Pool, Sqlite, SqlitePool};
 
-#[async_trait]
-impl EventHandler for Handler {
-    // Set a handler for the `message` event. This is called whenever a new message is received.
-    //
-    // Event handlers are dispatched through a threadpool, and so multiple events can be
-    // dispatched simultaneously.
-    async fn message(&self, ctx: Context, msg: Message) {
-        if msg.content == "!ping" {
-            if let Err(why) = msg.channel_id.say(&ctx.http, "Pong!").await {
-                println!("Error sending message: {:?}", why);
-            }
+pub struct AccessInfo {
+    pool: Pool<Sqlite>,
+    user: User,
+    login: String,
+    user_access_info: LoginUserInfo,
+}
+
+pub trait Access {
+    fn get_user(&self) -> User;
+    async fn new(pass: &str) -> AccessInfo;
+    async fn get_pool(&self) -> Pool<Sqlite>;
+    async fn get_login(&self) -> String;
+    async fn get_access_info(&self) -> LoginUserInfo;
+}
+
+impl Access for AccessInfo {
+    fn get_user(&self) -> User {
+        self.user.clone()
+    }
+    async fn get_pool(&self) -> Pool<Sqlite> {
+        self.pool.clone()
+    }
+
+    async fn get_login(&self) -> String {
+        self.login.clone()
+    }
+    async fn get_access_info(&self) -> LoginUserInfo {
+        self.user_access_info.clone()
+    }
+
+    async fn new(pass: &str) -> Self {
+        let p = SqlitePool::connect(pass).await.unwrap();
+        let u = User::get_userinfo();
+        let l = LoginUserInfo::log_user_access(&p, &u.get_userid())
+            .await
+            .unwrap();
+        let ai = LoginUserInfo::get_access_info(&p, &u.get_userid())
+            .await
+            .unwrap();
+        Self {
+            pool: p,
+            user: u,
+            login: l,
+            user_access_info: ai,
         }
-    } // Set a handler to be called on the `ready` event. This is called when a shard is booted, and
-    // a READY payload is sent by Discord. This payload contains data like the current user's guild
-    // Ids, current user data, private channels, and more.
-    //
-    // In this case, just print what the current user's username is.
-    async fn ready(&self, _: Context, ready: Ready) {
-        println!("{} is connected!", ready.user.name)
+    }
+}
+
+#[derive(Debug)]
+pub struct Greeting {
+    message: String,
+}
+
+impl Greeting {
+    pub fn new(user_name: &str, login_time: String, count_login: usize) -> Self {
+        let message = format!(
+            "こんにちは{}さん.現在時刻は{}です.あなたはこれまで{:?}回ログインしました．",
+            user_name, login_time, count_login
+        );
+        Greeting { message }
+    }
+    pub fn get_message(&self) -> String {
+        self.message.clone()
     }
 }

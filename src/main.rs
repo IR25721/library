@@ -1,52 +1,98 @@
-use discord_bot::Handler;
+use discord_bot::Access;
+use discord_bot::AccessInfo;
+use discord_bot::Greeting;
 use readname::User;
-use sqlx::*;
 use tokio::io::AsyncReadExt;
-use user_table::LoginInfo;
-use user_table::LoginUserInfo;
-use user_table::is_user_exists;
-use user_table::register_userinfo;
+use user_table::{LoginInfo, LoginUserInfo, is_user_exists, register_userinfo};
 mod discord_bot;
 mod readname;
 mod user_table;
+
+use serenity::async_trait;
+use serenity::model::gateway::Ready;
 use serenity::prelude::*;
 use std::env;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+pub struct Handler {
+    is_exist: bool,
+    greeting: String,
+    has_sent: AtomicBool,
+}
+
+impl Handler {
+    pub fn new(is_exist: bool, greeting: String) -> Self {
+        Self {
+            is_exist,
+            greeting,
+            has_sent: AtomicBool::new(false),
+        }
+    }
+}
+#[async_trait]
+impl EventHandler for Handler {
+    async fn ready(&self, _: Context, ready: Ready) {
+        println!("{} is connected!", ready.user.name);
+    }
+
+    async fn guild_create(
+        &self,
+        ctx: Context,
+        guild: serenity::model::guild::Guild,
+        _is_new: Option<bool>,
+    ) {
+        println!("GuildCreateイベント発生: {}", guild.name);
+
+        if self.is_exist && !self.has_sent.load(Ordering::Relaxed) {
+            let _channel_id = guild
+                .channels
+                .iter()
+                .find(|(_, c)| c.kind == serenity::model::channel::ChannelType::Text)
+                .map(|(&id, _)| id);
+
+            if let Some((id, channel)) = guild
+                .channels
+                .iter()
+                .find(|(_, c)| c.kind == serenity::model::channel::ChannelType::Text)
+            {
+                println!(
+                    "メッセージを送信するチャンネル {} (名前: {}) を見つけました",
+                    id, channel.name
+                );
+                match id.say(&ctx.http, self.greeting.clone()).await {
+                    Ok(_) => {
+                        println!("メッセージ送信に成功しました");
+                        self.has_sent.store(true, Ordering::Relaxed);
+                    }
+                    Err(why) => {
+                        println!("送信失敗: {:?}", why);
+                    }
+                }
+            } else {
+                println!("適切なテキストチャンネルが見つかりませんでした");
+            }
+        }
+    }
+}
 
 #[tokio::main]
-async fn main() -> Result<()> {
-    let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
-    let intents = GatewayIntents::GUILD_MESSAGES
-        | GatewayIntents::DIRECT_MESSAGES
-        | GatewayIntents::MESSAGE_CONTENT;
-    let mut client = Client::builder(&token, intents)
-        .event_handler(Handler)
-        .await
-        .expect("Err creating client");
-
-    let _bot_task = tokio::spawn(async move {
-        if let Err(why) = client.start().await {
-            println!("Client error: {why:?}");
-        }
-    });
-
-    let pool = SqlitePool::connect("sqlite:database.db").await?;
-
-    let user = User::get_userinfo();
-    let user_id = user.get_userid();
-    let user_name = user.get_username();
-    let register_userinfo = register_userinfo(&pool, &user);
-    let login = LoginUserInfo::log_user_access(&pool, &user_id);
-    let user_access_info = LoginUserInfo::get_access_info(&pool, &user_id).await?;
-    let is_exist = is_user_exists(&pool, &user_id);
-
-    if is_exist.await? {
-        let greeting = format!(
-            "こんにちは{}さん.現在時刻は{}です.あなたはこれまで{:?}回ログインしました．",
-            user_name,
-            login.await?,
-            user_access_info.get_count_login()
-        );
-        println!("{}", greeting);
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let access_data = AccessInfo::new("sqlite:database.db").await;
+    let pool = &access_data.get_pool().await;
+    let user = &access_data.get_user();
+    let user_id = access_data.get_user().get_userid();
+    let user_name = access_data.get_user().get_username();
+    let register_userinfo = register_userinfo(pool, user);
+    let login = access_data.get_login();
+    let user_access_info = LoginUserInfo::get_access_info(pool, &user_id).await?;
+    let is_exist = is_user_exists(pool, &user_id).await?;
+    let greeting = Greeting::get_message(&Greeting::new(
+        &user_name,
+        login.await,
+        user_access_info.get_count_login(),
+    ));
+    if is_exist {
+        println!("{}", &greeting);
     } else {
         println!(
             "はじめまして！\nDBにUser情報を登録しますか？\n登録するならEnterを，しないなら終了してください．"
@@ -64,6 +110,21 @@ async fn main() -> Result<()> {
             println!("登録をキャンセルしました");
         }
     }
+    let handler = Handler::new(is_exist, greeting.clone());
+    let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
+    let intents = GatewayIntents::GUILD_MESSAGES
+        | GatewayIntents::GUILDS
+        | GatewayIntents::DIRECT_MESSAGES
+        | GatewayIntents::MESSAGE_CONTENT;
+
+    let mut client = Client::builder(&token, intents)
+        .event_handler(handler)
+        .await
+        .expect("Err creating client");
+
+    if let Err(why) = client.start().await {
+        println!("Client error: {why:?}");
+    };
 
     Ok(())
 }

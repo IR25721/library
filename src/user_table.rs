@@ -6,7 +6,7 @@ pub trait LoginInfo {
     async fn log_user_access(pool: &SqlitePool, card_id: &str) -> sqlx::Result<String>;
     async fn get_access_info(pool: &SqlitePool, card_id: &str) -> sqlx::Result<LoginUserInfo>;
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LoginUserInfo {
     last_login: String,
     latest_login: String,
@@ -44,6 +44,7 @@ pub async fn is_user_exists(pool: &SqlitePool, card_id: &str) -> sqlx::Result<bo
 impl LoginInfo for LoginUserInfo {
     async fn log_user_access(pool: &SqlitePool, card_id: &str) -> sqlx::Result<String> {
         if is_user_exists(pool, card_id).await? {
+            println!("ログイン処理開始！");
             let now = Local::now().to_rfc3339();
 
             sqlx::query!(

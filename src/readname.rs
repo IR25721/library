@@ -13,6 +13,7 @@ pub trait Fromcard {
 pub struct User {
     userid: String,
     username: String,
+    is_login: bool,
 }
 
 impl Fromcard for User {
@@ -25,9 +26,11 @@ impl Fromcard for User {
             let vec = Self::extract_bytes(&stdout)?;
             let name = Self::decode_shift_jis(&vec);
             let id = Self::get_cardid(&stdout)?;
+            let islogin = true;
             Ok(Self {
                 userid: id,
                 username: name,
+                is_login: islogin,
             })
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -42,6 +45,9 @@ impl User {
     }
     pub fn get_userid(&self) -> String {
         self.userid.clone()
+    }
+    pub fn get_is_login(&self) -> bool {
+        self.is_login
     }
     fn extract_bytes(dump: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         let re = Regex::new(r"006A:0001:([0-9A-F]{32})")?;
